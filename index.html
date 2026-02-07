@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Micravise Animate</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            height: 100dvh;
+            width: 100%;
+            overflow: hidden;
+            user-select: none;
+            touch-action: none;
+            background-color: #e5e7eb;
+        }
+
+        .gradient-text {
+            background: linear-gradient(90deg, #1e88e5 0%, #00e5ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.03em;
+        }
+
+        .page-enter {
+            animation: slideIn 0.3s ease-out forwards;
+        }
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .custom-input {
+            border: 1px solid #9ca3af;
+            border-radius: 4px;
+            padding: 12px 16px;
+            width: 100%;
+            outline: none;
+            color: #374151;
+            font-size: 16px;
+        }
+        .custom-input:focus {
+            border-color: #ef4444;
+        }
+
+        .tool-btn {
+            transition: all 0.2s;
+            border-radius: 8px;
+        }
+        .tool-btn.active {
+            color: #1e88e5;
+            background-color: #dbeafe;
+        }
+
+        .frame-item {
+            border: 2px solid transparent;
+            transition: border-color 0.2s;
+        }
+        .frame-item.active {
+            border-color: #2563eb;
+        }
+
+        #canvas-container {
+            touch-action: none;
+            background-image: 
+                linear-gradient(45deg, #d1d5db 25%, transparent 25%), 
+                linear-gradient(-45deg, #d1d5db 25%, transparent 25%), 
+                linear-gradient(45deg, transparent 75%, #d1d5db 75%), 
+                linear-gradient(-45deg, transparent 75%, #d1d5db 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            transform-origin: center center;
+            transition: transform 0.1s linear; 
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            position: relative; 
+        }
+        
+        .layer-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; 
+        }
+        #layer-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: white;
+            z-index: 0;
+        }
+        #onion-skin-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+            opacity: 0.3;
+        }
+
+        #selection-box {
+            position: absolute;
+            border: 2px dashed #ef4444;
+            background-color: rgba(239, 68, 68, 0.05);
+            pointer-events: none;
+            display: none;
+            z-index: 9999;
+            overflow: hidden;
+        }
+        #selection-img {
+            width: 100%;
+            height: 100%;
+            object-fit: fill;
+            display: none;
+            pointer-events: none;
+        }
+
+        #edit-menu {
+            position: absolute;
+            bottom: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            padding: 8px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            display: none;
+            gap: 12px;
+            z-index: 10000;
+        }
+
+        #brush-size-panel {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 300px;
+            background-color: #374151; 
+            color: white;
+            padding: 16px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            display: none;
+            z-index: 200;
+            border: 1px solid #4b5563;
+        }
+        
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 24px; width: 24px; border-radius: 50%; background: #3b82f6; cursor: pointer; margin-top: -10px; box-shadow: 0 0 2px rgba(0,0,0,0.5); }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #9ca3af; border-radius: 2px; }
+
+        .modal-overlay { background: rgba(0,0,0,0.5); backdrop-filter: blur(2px); z-index: 100; }
+        #color-picker-canvas { touch-action: none; border-radius: 50%; cursor: crosshair; }
+        
+        .layer-item { padding: 8px 12px; border-bottom: 1px solid #f3f4f6; display: flex; align-items: center; justify-content: space-between; background: white; border-left: 4px solid transparent; cursor: pointer; }
+        .layer-item.active { background: #fdf2f8; border-left-color: #db2777; }
+        .layer-item-title { font-size: 14px; font-weight: 500; color: #374151; }
+        .layer-item.active .layer-item-title { color: #db2777; }
+    </style>
+</head>
+<body class="flex flex-col text-gray-800">
+
+    <!-- ================= PAGE 1: HOME ================= -->
+    <div id="home-page" class="flex flex-col h-full w-full bg-white absolute inset-0 z-50">
+        <header class="w-full bg-white border-b-2 border-black py-3 shrink-0">
+            <div class="text-center">
+                <h1 class="text-4xl md:text-5xl font-medium gradient-text leading-tight">
+                    Micravise animate
+                </h1>
+            </div>
+        </header>
+
+        <main class="flex-grow w-full relative overflow-y-auto p-4 flex flex-col items-center gap-4">
+            <div id="placeholder-text" class="absolute inset-0 flex items-center justify-center text-gray-300 pointer-events-none">
+                <span class="text-lg">Belum ada proyek</span>
+            </div>
+            <div id="project-list" class="w-full max-w-md flex flex-col gap-4 pb-24"></div>
+        </main>
+
+        <footer class="w-full bg-[#4a7ac9] h-20 shrink-0 flex items-center justify-center cursor-pointer active:bg-[#3b66ab] transition-colors shadow-inner" onclick="goToForm()">
+            <div class="text-white text-6xl font-light leading-none select-none" style="margin-top: -8px;">+</div>
+        </footer>
+    </div>
+
+    <!-- ================= PAGE 2: FORM ================= -->
+    <div id="form-page" class="hidden flex-col h-full w-full bg-white p-6 absolute inset-0 z-50">
+        <button onclick="goHome()" class="absolute top-4 left-4 text-gray-500 hover:text-black">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+        </button>
+
+        <div class="max-w-md mx-auto w-full mt-12 flex flex-col gap-6 page-enter">
+            <div><input type="text" id="input-name" placeholder="Nama animasimu" class="custom-input"></div>
+            <div>
+                <label class="block text-gray-800 mb-2">Ukuran kanvas</label>
+                <div class="flex gap-4"><input type="number" id="input-width" placeholder="Lebar" class="custom-input" value="720"><input type="number" id="input-height" placeholder="Tinggi" class="custom-input" value="1280"></div>
+            </div>
+            <div><label class="block text-gray-800 mb-2">Frame per second</label><input type="number" id="input-fps" placeholder="FPS" class="custom-input" value="12"></div>
+            <button onclick="startEditor()" class="w-full bg-[#e31b3c] hover:bg-[#c41530] text-white text-lg font-medium py-3 rounded-lg mt-4 transition-colors shadow-md">Konfirmasi</button>
+        </div>
+    </div>
+
+    <!-- ================= PAGE 3: EDITOR ================= -->
+    <div id="editor-page" class="hidden flex-col h-full w-full bg-gray-200 absolute inset-0 z-40">
+        <!-- TOP BAR -->
+        <div class="h-14 px-4 flex items-center justify-between shrink-0 bg-gray-200 relative z-50">
+            <div class="flex gap-4">
+                <button onclick="undo()" class="p-1 rounded hover:bg-gray-300 text-gray-700 active:scale-95 transition-transform"><svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg></button>
+                <button onclick="redo()" class="p-1 rounded hover:bg-gray-300 text-gray-700 active:scale-95 transition-transform"><svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 10h-10a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6" /></svg></button>
+            </div>
+            <div class="flex gap-3">
+                <!-- DOWNLOAD BUTTON -->
+                <button onclick="exportAnimation()" class="bg-blue-600/90 p-1.5 rounded-full text-white hover:bg-blue-500 shadow-md flex items-center justify-center" title="Download Video">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                </button>
+                <button onclick="exitEditor()" class="bg-gray-300/50 p-1.5 rounded-full text-gray-600 hover:bg-gray-300"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" /></svg></button>
+            </div>
+        </div>
+
+        <!-- MAIN WORKSPACE -->
+        <div class="flex-grow flex items-center justify-center relative overflow-hidden bg-gray-200 touch-none" id="editor-workspace">
+            <div id="canvas-container" class="relative bg-white shadow-xl">
+                 <div id="layer-bg"></div>
+                 <canvas id="onion-skin-canvas"></canvas>
+                 <div id="selection-box">
+                     <img id="selection-img" src="" alt="">
+                 </div>
+            </div>
+
+            <!-- Edit Menu -->
+            <div id="edit-menu" class="flex items-center">
+                <button onclick="performCut()" class="p-2 text-gray-700 hover:bg-gray-100 rounded flex flex-col items-center"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.5 3a.5.5 0 000 1v2.936l6.5 6.5V13.5a.5.5 0 001 0V9.207l-6.5-6.5H5.5zM8 7.5a.5.5 0 01.5-.5h5a.5.5 0 01.5.5v5a.5.5 0 01-.5.5h-5a.5.5 0 01-.5-.5v-5z" clip-rule="evenodd" /><path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" /></svg><span class="text-[10px]">Potong</span></button>
+                <button onclick="performCopy()" class="p-2 text-gray-700 hover:bg-gray-100 rounded flex flex-col items-center"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M7 9a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2H9a2 2 0 01-2-2V9z" /><path d="M5 3a2 2 0 00-2 2v6a2 2 0 002 2V5h8a2 2 0 00-2-2H5z" /></svg><span class="text-[10px]">Salin</span></button>
+                <button id="btn-paste-menu" onclick="performPaste()" class="p-2 text-gray-700 hover:bg-gray-100 rounded flex flex-col items-center hidden"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" /><path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" /></svg><span class="text-[10px]">Tempel</span></button>
+                <div class="w-[1px] h-6 bg-gray-300 mx-1"></div>
+                <button onclick="cancelSelection()" class="p-2 text-red-500 hover:bg-red-50 rounded flex flex-col items-center"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" /></svg><span class="text-[10px]">Batal</span></button>
+            </div>
+
+            <!-- Brush Size -->
+            <div id="brush-size-panel" class="flex-col gap-3">
+                <div class="flex justify-between items-center mb-1">
+                    <span id="brush-size-label" class="font-medium text-sm">Ukuran Brush</span>
+                    <span id="brush-size-display" class="font-mono text-xs bg-gray-700 px-2 py-1 rounded">8px</span>
+                </div>
+                <input type="range" id="brush-slider" min="1" max="100" value="8" class="w-full">
+            </div>
+
+            <button onclick="resetZoom()" class="absolute bottom-4 right-4 bg-white/80 p-2 rounded-full shadow-md text-gray-600 backdrop-blur-sm z-10"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg></button>
+        </div>
+
+        <!-- BOTTOM AREA -->
+        <div class="bg-[#e5e5e5] w-full shrink-0 flex flex-col z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] pb-safe">
+            <div class="flex items-center justify-between px-2 py-2 overflow-x-auto gap-1 no-scrollbar">
+                <button class="tool-btn p-2 text-gray-700 flex flex-col items-center"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></button>
+                <button id="btn-brush" class="tool-btn active p-2 text-gray-700 flex flex-col items-center" onclick="setTool('brush')"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="currentColor"><path d="M14.083 2.5l7.417 7.417-14.083 14.083h-7.417v-7.417l14.083-14.083zm-1.637 13.19l-7.446-7.446v4.619l2.828 2.828h4.618zm1.414-1.414l2.121-2.121 2.121 2.121-2.121 2.121-2.121-2.121z"/></svg></button>
+                <button id="btn-eraser" class="tool-btn p-2 text-gray-700 flex flex-col items-center" onclick="setTool('eraser')"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24"><path d="M16.24 3.56l4.95 4.94c.78.79.78 2.05 0 2.84L12 20.53a4.008 4.008 0 0 1-5.66 0L2.81 17c-.78-.79-.78-2.05 0-2.84l10.6-10.6c.79-.78 2.05-.78 2.83 0zM4.22 15.58l3.54 3.53c.78.79 2.04.79 2.83 0l8.48-8.48-6.37-6.37L4.22 12.75c-.78.78-.78 2.05 0 2.83z"/></svg></button>
+                <button id="btn-bucket" class="tool-btn p-2 text-gray-700 flex flex-col items-center" onclick="setTool('bucket')"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="currentColor"><path d="M19.228 18.732l1.767-1.768 1.768 1.768a2.5 2.5 0 1 1-3.535 0zM8.845 10.205 10.053 14 14 10.053 8.845 10.205zM3.7 16.312l9.656 9.656c.55.55 1.636.293 2.072-.143l5.464-5.464c.436-.436.693-1.523.143-2.072L11.379 8.633c-.55-.55-1.636-.293-2.072.143L3.843 14.24c-.436.436-.693 1.523-.143 2.072z"/></svg></button>
+                <button id="btn-select" class="tool-btn p-2 text-gray-700 flex flex-col items-center" onclick="setTool('select')"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-dasharray="3 3"><rect x="3" y="3" width="18" height="18" rx="2" /></svg></button>
+                <button id="btn-color" class="tool-btn p-2 text-gray-700 flex flex-col items-center" onclick="openColorPicker()"><div id="color-preview-box" class="w-6 h-6 bg-black rounded-sm border border-gray-400 shadow-sm"></div></button>
+                <button id="btn-layers" class="tool-btn p-2 text-gray-700 flex flex-col items-center" onclick="openLayerPanel()"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg></button>
+                <button class="tool-btn p-2 text-gray-700 flex flex-col items-center"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3" fill="currentColor" /></svg></button>
+            </div>
+
+            <div class="flex items-center justify-between px-3 py-2 bg-[#f3f4f6] border-t border-gray-300 h-[90px]">
+                <div class="flex gap-2 items-center overflow-x-auto w-3/5 no-scrollbar h-full py-1" id="timeline-scroll">
+                    <!-- Frame List -->
+                </div>
+                <!-- TIMELINE CONTROLS -->
+                <div class="flex items-center gap-2 pr-2">
+                    <!-- DELETE FRAME -->
+                    <button onclick="deleteFrame()" class="text-gray-500 hover:text-red-500 p-2 active:scale-90 transition-transform bg-white rounded-lg shadow-sm border border-gray-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>
+                    </button>
+                    <!-- DUPLICATE FRAME -->
+                    <button onclick="duplicateFrame()" class="text-gray-500 hover:text-blue-500 p-2 active:scale-90 transition-transform bg-white rounded-lg shadow-sm border border-gray-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M7 9a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2H9a2 2 0 01-2-2V9z" /><path d="M5 3a2 2 0 00-2 2v6a2 2 0 002 2V5h8a2 2 0 00-2-2H5z" /></svg>
+                    </button>
+                    <!-- ADD FRAME -->
+                    <button onclick="addNewFrameToTimeline()" class="text-black hover:text-gray-700 active:scale-90 transition-transform bg-white rounded-lg shadow-sm border border-gray-200 p-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
+                    </button>
+                </div>
+                <!-- PLAY BUTTON -->
+                <div class="flex items-center justify-end">
+                    <button id="btn-play" onclick="togglePlay()" class="active:scale-90 transition-transform">
+                        <svg id="icon-play" width="42" height="42" viewBox="0 0 24 24" fill="black" xmlns="http://www.w3.org/2000/svg"><path d="M8 5v14l11-7z"/></svg>
+                        <svg id="icon-stop" class="hidden" width="42" height="42" viewBox="0 0 24 24" fill="black" xmlns="http://www.w3.org/2000/svg"><path d="M6 6h12v12H6z"/></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALS SAME AS BEFORE -->
+    <div id="color-modal" class="hidden modal-overlay absolute inset-0 flex items-center justify-center">
+        <div class="bg-gray-800 p-4 rounded-2xl shadow-2xl border border-gray-600 flex flex-col items-center gap-4 relative">
+            <button onclick="closeColorPicker()" class="absolute top-2 right-2 text-gray-400 hover:text-white"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
+            <h3 class="text-white font-medium text-sm mt-1">Pilih Warna</h3>
+            <canvas id="color-picker-canvas" width="250" height="250"></canvas>
+            <div id="hex-display" class="text-gray-300 font-mono text-sm">#000000</div>
+            <button onclick="closeColorPicker()" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg font-medium">Pilih</button>
+        </div>
+    </div>
+
+    <div id="layer-modal" class="hidden modal-overlay absolute inset-0 flex items-end justify-center md:items-center">
+        <div class="bg-white w-full md:w-80 md:rounded-xl rounded-t-2xl shadow-2xl h-1/2 md:h-auto flex flex-col overflow-hidden relative" style="max-height: 70%;">
+            <div class="p-4 border-b border-gray-100 flex items-center justify-between bg-white">
+                <h3 class="font-bold text-gray-800">Lapisan</h3>
+                <button onclick="closeLayerPanel()" class="text-gray-400 hover:text-gray-600"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
+            </div>
+            <div id="layer-list" class="flex-grow overflow-y-auto bg-white"></div>
+            <div class="p-4 border-t border-gray-100 bg-white flex justify-center">
+                <button onclick="addNewLayer()" class="text-[#db2777] hover:bg-pink-50 p-2 rounded-full transition-colors"><svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg></button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const homePage = document.getElementById('home-page');
+        const formPage = document.getElementById('form-page');
+        const editorPage = document.getElementById('editor-page');
+        const projectList = document.getElementById('project-list');
+        const placeholder = document.getElementById('placeholder-text');
+        
+        let projects = []; 
+        let currentProjectData = {};
+        
+        let frames = [];
+        let currentFrameIndex = 0;
+        
+        let layers = [];
+        let activeLayerIndex = 0;
+        let layerCounter = 0;
+
+        let selectionStart = null;
+        let selectionRect = null;
+        let clipboard = null;
+        let isMovingSelection = false;
+        let isImageLifted = false;
+        let selectionImageData = null;
+        const selectionImg = document.getElementById('selection-img');
+
+        let brushSize = 8;
+        let eraserSize = 30;
+        const brushSizePanel = document.getElementById('brush-size-panel');
+        const brushSlider = document.getElementById('brush-slider');
+        const brushSizeLabel = document.getElementById('brush-size-label');
+        const brushSizeDisplay = document.getElementById('brush-size-display');
+
+        let isPlaying = false;
+        let playInterval = null;
+        const iconPlay = document.getElementById('icon-play');
+        const iconStop = document.getElementById('icon-stop');
+
+        function goToForm() { homePage.classList.add('hidden'); formPage.classList.remove('hidden'); formPage.classList.add('flex'); document.getElementById('input-name').value = ''; }
+        function goHome() { formPage.classList.add('hidden'); formPage.classList.remove('flex'); editorPage.classList.add('hidden'); editorPage.classList.remove('flex'); homePage.classList.remove('hidden'); }
+
+        function startEditor() {
+            const name = document.getElementById('input-name').value || 'Tanpa Judul';
+            const width = parseInt(document.getElementById('input-width').value) || 720;
+            const height = parseInt(document.getElementById('input-height').value) || 1280;
+            const fps = document.getElementById('input-fps').value || 12;
+            const newId = Date.now();
+            currentProjectData = { id: newId, name, width, height, fps };
+            formPage.classList.add('hidden'); formPage.classList.remove('flex'); editorPage.classList.remove('hidden'); editorPage.classList.add('flex');
+            setTimeout(() => { initEditor(width, height); resetZoom(); }, 50);
+        }
+
+        function openProject(id) {
+            const data = projects.find(p => p.id === id);
+            if (!data) return;
+            currentProjectData = data;
+            homePage.classList.add('hidden'); formPage.classList.add('hidden'); editorPage.classList.remove('hidden'); editorPage.classList.add('flex');
+            setTimeout(() => {
+                initEditor(data.width, data.height);
+                if (data.frames && data.frames.length > 0) {
+                    frames = data.frames;
+                    const savedLayerCount = data.layerCount || 1;
+                    for(let i=1; i<savedLayerCount; i++) { addNewLayer(); }
+                    currentFrameIndex = 0; loadFrameData(0); renderTimeline();
+                }
+                resetZoom();
+            }, 50);
+        }
+
+        function exitEditor() { 
+            if(isPlaying) togglePlay();
+            saveCurrentFrameData();
+            const existingIndex = projects.findIndex(p => p.id === currentProjectData.id);
+            currentProjectData.frames = frames;
+            currentProjectData.layerCount = layers.length;
+            if (existingIndex !== -1) { projects[existingIndex] = currentProjectData; } else { projects.unshift(currentProjectData); }
+            renderProjectList();
+            goHome(); 
+        }
+        function addProjectToStorage(data) { const existingIndex = projects.findIndex(p => p.id === data.id); if (existingIndex !== -1) { projects[existingIndex] = data; } else { projects.unshift(data); } renderProjectList(); }
+        function deleteProject(id, e) { e.stopPropagation(); projects = projects.filter(p => p.id !== id); renderProjectList(); }
+        function renderProjectList() {
+            projectList.innerHTML = '';
+            if (projects.length === 0) { placeholder.style.display = 'flex'; return; } else { placeholder.style.display = 'none'; }
+            projects.forEach((data) => {
+                const card = document.createElement('div'); card.className = 'w-full bg-white border border-gray-200 rounded-lg shadow-sm p-4 flex items-center justify-between page-enter hover:shadow-md transition-shadow cursor-pointer'; card.onclick = () => openProject(data.id);
+                card.innerHTML = `<div class="flex items-center gap-4 pointer-events-none"><div class="h-12 w-12 bg-gray-100 rounded flex items-center justify-center text-gray-400 border border-gray-200"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg></div><div><h3 class="font-medium text-gray-800 text-lg leading-tight">${data.name}</h3><p class="text-xs text-gray-500 mt-1">${data.width}x${data.height}px • ${data.fps} FPS</p></div></div>`;
+                const delBtn = document.createElement('button'); delBtn.className = "text-gray-300 hover:text-red-500 p-2 z-10 relative"; delBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>`; delBtn.onclick = (e) => deleteProject(data.id, e); card.appendChild(delBtn); projectList.appendChild(card);
+            });
+        }
+
+        const canvasContainer = document.getElementById('canvas-container'); const workspace = document.getElementById('editor-workspace'); const onionSkinCanvas = document.getElementById('onion-skin-canvas'); const onionCtx = onionSkinCanvas.getContext('2d'); const timelineScroll = document.getElementById('timeline-scroll');
+        let canvasW, canvasH;
+
+        function initEditor(w, h) {
+            canvasW = w; canvasH = h;
+            const wsWidth = workspace.clientWidth; const wsHeight = workspace.clientHeight; const padding = 40; const ratio = w / h; let displayW, displayH;
+            if ((wsWidth - padding) / (wsHeight - padding) > ratio) { displayH = wsHeight - padding; displayW = displayH * ratio; } else { displayW = wsWidth - padding; displayH = displayW / ratio; }
+            canvasContainer.style.width = `${displayW}px`; canvasContainer.style.height = `${displayH}px`;
+            onionSkinCanvas.width = w; onionSkinCanvas.height = h;
+            layers = []; activeLayerIndex = 0; layerCounter = 0;
+            frames = []; frames.push([]); currentFrameIndex = 0;
+            const oldCanvases = document.querySelectorAll('.layer-canvas'); oldCanvases.forEach(el => el.remove());
+            addNewLayer(true); setTool('brush'); updateBrushColor(); cancelSelection();
+            brushSize = 8; eraserSize = 30; 
+            renderTimeline();
+            isPlaying = false; clearInterval(playInterval); iconPlay.classList.remove('hidden'); iconStop.classList.add('hidden');
+        }
+
+        // --- EXPORT LOGIC ---
+        async function exportAnimation() {
+            if (frames.length === 0) return;
+            saveCurrentFrameData();
+            const fps = parseInt(currentProjectData.fps) || 12;
+            const width = canvasW;
+            const height = canvasH;
+            const exportCanvas = document.createElement('canvas');
+            exportCanvas.width = width;
+            exportCanvas.height = height;
+            const ctx = exportCanvas.getContext('2d');
+            const stream = exportCanvas.captureStream(fps);
+            const mimeTypes = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+            let mimeType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) || '';
+            if (!mimeType) { alert("Browser tidak mendukung ekspor video."); return; }
+            const recorder = new MediaRecorder(stream, { mimeType });
+            const chunks = [];
+            recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+            recorder.onstop = () => {
+                const blob = new Blob(chunks, { type: mimeType });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${currentProjectData.name || 'animasi'}.webm`;
+                document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+                alert("Download Selesai!");
+            };
+            recorder.start();
+            let frameIdx = 0;
+            const drawFrame = (idx) => {
+                ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, width, height);
+                const frameData = frames[idx];
+                if (frameData) { frameData.forEach(imgData => { const tempC = document.createElement('canvas'); tempC.width = width; tempC.height = height; tempC.getContext('2d').putImageData(imgData, 0, 0); ctx.drawImage(tempC, 0, 0); }); }
+            };
+            drawFrame(0);
+            const interval = setInterval(() => {
+                frameIdx++; if (frameIdx < frames.length) { drawFrame(frameIdx); } else { clearInterval(interval); setTimeout(() => { recorder.stop(); }, 1000 / fps); }
+            }, 1000 / fps);
+        }
+
+        function togglePlay() {
+            if (isPlaying) { isPlaying = false; clearInterval(playInterval); iconPlay.classList.remove('hidden'); iconStop.classList.add('hidden'); loadFrameData(currentFrameIndex); } 
+            else { saveCurrentFrameData(); isPlaying = true; iconPlay.classList.add('hidden'); iconStop.classList.remove('hidden'); onionCtx.clearRect(0, 0, canvasW, canvasH); const fps = parseInt(currentProjectData.fps) || 12; const intervalTime = 1000 / fps; playInterval = setInterval(() => { currentFrameIndex++; if (currentFrameIndex >= frames.length) { currentFrameIndex = 0; } loadFrameData(currentFrameIndex, true); updateTimelineActiveState(); }, intervalTime); }
+        }
+        function updateTimelineActiveState() { const items = timelineScroll.children; for (let i = 0; i < items.length; i++) { const item = items[i]; if (i === currentFrameIndex) { item.classList.add('border-blue-500'); item.classList.remove('border-transparent'); item.querySelector('.absolute.bottom-0').classList.add('bg-blue-500'); if (i % 5 === 0) item.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }); } else { item.classList.remove('border-blue-500'); item.classList.add('border-transparent'); item.querySelector('.absolute.bottom-0').classList.remove('bg-blue-500'); } } }
+
+        function saveCurrentFrameData() { const frameData = []; layers.forEach(layer => { frameData.push(layer.ctx.getImageData(0,0, canvasW, canvasH)); }); frames[currentFrameIndex] = frameData; }
+        function loadFrameData(index, isPlayingMode = false) { layers.forEach(layer => { layer.ctx.clearRect(0,0, canvasW, canvasH); if(!isPlayingMode) { layer.history = []; layer.historyStep = -1; } }); const frameData = frames[index]; if(frameData && frameData.length > 0) { frameData.forEach((imgData, i) => { if (layers[i]) { layers[i].ctx.putImageData(imgData, 0, 0); if(!isPlayingMode) { layers[i].history.push(layers[i].canvas.toDataURL()); layers[i].historyStep = 0; } } }); } if(!isPlayingMode) updateOnionSkin(); }
+        
+        function addNewFrameToTimeline() { if(isPlaying) return; saveCurrentFrameData(); currentFrameIndex++; frames.splice(currentFrameIndex, 0, []); layers.forEach(layer => { layer.ctx.clearRect(0, 0, canvasW, canvasH); layer.history = []; layer.historyStep = -1; }); renderTimeline(); updateOnionSkin(); }
+        
+        // --- NEW: DELETE FRAME ---
+        function deleteFrame() {
+            if (frames.length <= 1) { alert("Minimal satu frame harus ada."); return; }
+            frames.splice(currentFrameIndex, 1);
+            if (currentFrameIndex >= frames.length) currentFrameIndex = frames.length - 1;
+            loadFrameData(currentFrameIndex);
+            renderTimeline();
+        }
+
+        // --- NEW: DUPLICATE FRAME ---
+        function duplicateFrame() {
+            if(isPlaying) return;
+            saveCurrentFrameData();
+            
+            // Deep copy ImageData from current frame
+            const currentData = frames[currentFrameIndex];
+            const newData = currentData.map(imgData => {
+                const copy = new ImageData(new Uint8ClampedArray(imgData.data), imgData.width, imgData.height);
+                return copy;
+            });
+            
+            // Insert after current
+            frames.splice(currentFrameIndex + 1, 0, newData);
+            currentFrameIndex++;
+            
+            loadFrameData(currentFrameIndex);
+            renderTimeline();
+        }
+
+        function switchFrame(index) { if (index === currentFrameIndex || isPlaying) return; saveCurrentFrameData(); currentFrameIndex = index; loadFrameData(index); renderTimeline(); }
+        function renderTimeline() { timelineScroll.innerHTML = ''; frames.forEach((_, index) => { const isActive = index === currentFrameIndex; const div = document.createElement('div'); div.className = `frame-item h-full aspect-[3/4] bg-white shadow-sm shrink-0 relative cursor-pointer border-2 ${isActive ? 'border-blue-500' : 'border-transparent'}`; div.onclick = () => switchFrame(index); div.innerHTML = `<div class="absolute inset-0 flex items-center justify-center text-xs text-gray-400 font-medium">${index + 1}</div><div class="absolute bottom-0 w-full h-1 ${isActive ? 'bg-blue-500' : ''}"></div>`; timelineScroll.appendChild(div); }); }
+        function updateOnionSkin() { onionCtx.clearRect(0, 0, canvasW, canvasH); if (currentFrameIndex > 0) { const prevFrameData = frames[currentFrameIndex - 1]; if (prevFrameData) { const tempC = document.createElement('canvas'); tempC.width = canvasW; tempC.height = canvasH; const tempCtx = tempC.getContext('2d'); prevFrameData.forEach(imgData => { const layerTemp = document.createElement('canvas'); layerTemp.width = canvasW; layerTemp.height = canvasH; layerTemp.getContext('2d').putImageData(imgData, 0, 0); tempCtx.drawImage(layerTemp, 0, 0); }); onionCtx.globalAlpha = 0.3; onionCtx.drawImage(tempC, 0, 0); onionCtx.globalAlpha = 1.0; } } }
+
+        function addNewLayer(isFirst = false) { layerCounter++; const layerId = layerCounter; const canvasEl = document.createElement('canvas'); canvasEl.className = 'layer-canvas'; canvasEl.width = canvasW; canvasEl.height = canvasH; canvasEl.style.zIndex = layerCounter; canvasContainer.appendChild(canvasEl); const ctx = canvasEl.getContext('2d', { willReadFrequently: true }); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; const newLayer = { id: layerId, name: `Layer ${layerId}`, canvas: canvasEl, ctx: ctx, history: [], historyStep: -1 }; layers.push(newLayer); setActiveLayer(layers.length - 1); saveHistory(); renderLayerList(); }
+        function updateLayerZIndices() { layers.forEach((layer, index) => { layer.canvas.style.zIndex = index + 2; }); }
+        function setActiveLayer(index) { activeLayerIndex = index; renderLayerList(); updateToolStyle(); }
+        function removeLayer(index, e) { if(e) e.stopPropagation(); if(layers.length <= 1) { alert("Minimal satu layer harus ada."); return; } layers[index].canvas.remove(); layers.splice(index, 1); if(activeLayerIndex >= layers.length) activeLayerIndex = layers.length - 1; setActiveLayer(activeLayerIndex); updateLayerZIndices(); }
+        function moveLayer(index, direction, e) { e.stopPropagation(); const targetIndex = index + direction; if (targetIndex < 0 || targetIndex >= layers.length) return; const temp = layers[index]; layers[index] = layers[targetIndex]; layers[targetIndex] = temp; if (activeLayerIndex === index) { activeLayerIndex = targetIndex; } else if (activeLayerIndex === targetIndex) { activeLayerIndex = index; } updateLayerZIndices(); renderLayerList(); }
+
+        const selectionBox = document.getElementById('selection-box'); const editMenu = document.getElementById('edit-menu'); const btnPasteMenu = document.getElementById('btn-paste-menu');
+        function updateSelectionVisual() { if (!selectionRect) { selectionBox.style.display = 'none'; editMenu.style.display = 'none'; selectionImg.style.display = 'none'; return; } const displayW = canvasContainer.offsetWidth; const ratio = displayW / canvasW; selectionBox.style.left = `${selectionRect.x * ratio}px`; selectionBox.style.top = `${selectionRect.y * ratio}px`; selectionBox.style.width = `${selectionRect.w * ratio}px`; selectionBox.style.height = `${selectionRect.h * ratio}px`; selectionBox.style.display = 'block'; editMenu.style.display = 'flex'; if(clipboard) { btnPasteMenu.classList.remove('hidden'); } else { btnPasteMenu.classList.add('hidden'); } if(isImageLifted) selectionImg.style.display = 'block'; else selectionImg.style.display = 'none'; }
+        function liftSelectionImage() { if (!selectionRect || isImageLifted) return; const ctx = layers[activeLayerIndex].ctx; selectionImageData = ctx.getImageData(selectionRect.x, selectionRect.y, selectionRect.w, selectionRect.h); ctx.clearRect(selectionRect.x, selectionRect.y, selectionRect.w, selectionRect.h); const tempC = document.createElement('canvas'); tempC.width = selectionRect.w; tempC.height = selectionRect.h; tempC.getContext('2d').putImageData(selectionImageData, 0, 0); selectionImg.src = tempC.toDataURL(); isImageLifted = true; updateSelectionVisual(); }
+        function commitSelection() { if (!isImageLifted || !selectionImageData) { cancelSelection(); return; } const ctx = layers[activeLayerIndex].ctx; const tempC = document.createElement('canvas'); tempC.width = selectionImageData.width; tempC.height = selectionImageData.height; tempC.getContext('2d').putImageData(selectionImageData, 0, 0); ctx.drawImage(tempC, selectionRect.x, selectionRect.y); saveHistory(); isImageLifted = false; selectionImageData = null; selectionImg.src = ""; cancelSelection(); }
+        function performCut() { if (!selectionRect) return; const ctx = layers[activeLayerIndex].ctx; clipboard = ctx.getImageData(selectionRect.x, selectionRect.y, selectionRect.w, selectionRect.h); ctx.clearRect(selectionRect.x, selectionRect.y, selectionRect.w, selectionRect.h); saveHistory(); cancelSelection(); }
+        function performCopy() { if (!selectionRect) return; const ctx = layers[activeLayerIndex].ctx; clipboard = ctx.getImageData(selectionRect.x, selectionRect.y, selectionRect.w, selectionRect.h); cancelSelection(); }
+        function performPaste() { if (!clipboard) return; setTool('select'); const w = clipboard.width; const h = clipboard.height; const x = Math.floor((canvasW - w) / 2); const y = Math.floor((canvasH - h) / 2); selectionRect = { x, y, w, h }; selectionImageData = clipboard; isImageLifted = true; const tempC = document.createElement('canvas'); tempC.width = w; tempC.height = h; tempC.getContext('2d').putImageData(clipboard, 0, 0); selectionImg.src = tempC.toDataURL(); updateSelectionVisual(); }
+        function cancelSelection() { if(isImageLifted) { const ctx = layers[activeLayerIndex].ctx; const tempC = document.createElement('canvas'); tempC.width = selectionImageData.width; tempC.height = selectionImageData.height; tempC.getContext('2d').putImageData(selectionImageData, 0, 0); ctx.drawImage(tempC, selectionRect.x, selectionRect.y); saveHistory(); isImageLifted = false; } selectionRect = null; selectionStart = null; updateSelectionVisual(); }
+
+        function hexToRgb(hex) { const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex); return result ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) } : null; }
+        function floodFill(startX, startY, fillColorHex) { const w = canvasW; const h = canvasH; const tempC = document.createElement('canvas'); tempC.width = w; tempC.height = h; const tempCtx = tempC.getContext('2d'); tempCtx.fillStyle = '#ffffff'; tempCtx.fillRect(0, 0, w, h); layers.forEach(layer => { tempCtx.drawImage(layer.canvas, 0, 0); }); const compositeData = tempCtx.getImageData(0, 0, w, h).data; const layer = layers[activeLayerIndex]; const layerImgData = layer.ctx.getImageData(0, 0, w, h); const layerData = layerImgData.data; const fillColor = hexToRgb(fillColorHex); const fillR = fillColor.r, fillG = fillColor.g, fillB = fillColor.b, fillA = 255; const startPos = (startY * w + startX) * 4; const targetR = compositeData[startPos]; const targetG = compositeData[startPos+1]; const targetB = compositeData[startPos+2]; const targetA = compositeData[startPos+3]; if (targetR === fillR && targetG === fillG && targetB === fillB && targetA === fillA) return; const stack = [startPos]; const visited = new Uint8Array(w * h); while (stack.length) { const pos = stack.pop(); const idx = pos / 4; if (visited[idx]) continue; visited[idx] = 1; if (compositeData[pos] === targetR && compositeData[pos+1] === targetG && compositeData[pos+2] === targetB && compositeData[pos+3] === targetA) { layerData[pos] = fillR; layerData[pos+1] = fillG; layerData[pos+2] = fillB; layerData[pos+3] = fillA; const x = (pos / 4) % w; const y = Math.floor((pos / 4) / w); if (x > 0) stack.push(pos - 4); if (x < w - 1) stack.push(pos + 4); if (y > 0) stack.push(pos - w * 4); if (y < h - 1) stack.push(pos + w * 4); } } layer.ctx.putImageData(layerImgData, 0, 0); saveHistory(); }
+
+        let painting = false; let currentTool = 'brush'; let brushColor = '#000000';
+        let scale = 1; let panning = false; let pointX = 0, pointY = 0; let startX = 0, startY = 0; let initialDistance = 0, initialScale = 1;
+
+        function updateTransform() { canvasContainer.style.transform = `translate(${pointX}px, ${pointY}px) scale(${scale})`; }
+        function resetZoom() { scale = 1; pointX = 0; pointY = 0; updateTransform(); }
+
+        workspace.addEventListener('wheel', (e) => { e.preventDefault(); const delta = -e.deltaY; (delta > 0) ? (scale *= 1.1) : (scale /= 1.1); scale = Math.max(0.5, Math.min(5, scale)); updateTransform(); }, { passive: false });
+        workspace.addEventListener('touchstart', (e) => { if (e.touches.length === 2) { panning = true; initialDistance = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); initialScale = scale; startX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - pointX; startY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - pointY; e.preventDefault(); } }, { passive: false });
+        workspace.addEventListener('touchmove', (e) => { if (e.touches.length === 2 && panning) { e.preventDefault(); const currentX = (e.touches[0].clientX + e.touches[1].clientX) / 2; const currentY = (e.touches[0].clientY + e.touches[1].clientY) / 2; pointX = currentX - startX; pointY = currentY - startY; const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); if (initialDistance > 0) scale = initialScale * (dist / initialDistance); updateTransform(); } }, { passive: false });
+        workspace.addEventListener('touchend', (e) => { if (e.touches.length < 2) panning = false; });
+
+        function toggleBrushSizePanel(show) { if (show) { brushSizePanel.style.display = 'flex'; if (currentTool === 'brush') { brushSizeLabel.innerText = "Ukuran Brush"; brushSlider.value = brushSize; brushSizeDisplay.innerText = brushSize + "px"; } else if (currentTool === 'eraser') { brushSizeLabel.innerText = "Ukuran Penghapus"; brushSlider.value = eraserSize; brushSizeDisplay.innerText = eraserSize + "px"; } } else { brushSizePanel.style.display = 'none'; } }
+        brushSlider.addEventListener('input', (e) => { const val = parseInt(e.target.value); brushSizeDisplay.innerText = val + "px"; if (currentTool === 'brush') { brushSize = val; } else if (currentTool === 'eraser') { eraserSize = val; } updateToolStyle(); });
+        brushSizePanel.addEventListener('mousedown', (e) => e.stopPropagation()); brushSizePanel.addEventListener('touchstart', (e) => e.stopPropagation()); workspace.addEventListener('mousedown', () => toggleBrushSizePanel(false)); workspace.addEventListener('touchstart', () => toggleBrushSizePanel(false));
+
+        function setTool(tool) { if (tool === currentTool && (tool === 'brush' || tool === 'eraser')) { const isVisible = brushSizePanel.style.display === 'flex'; toggleBrushSizePanel(!isVisible); return; } if (currentTool === 'select' && isImageLifted) { commitSelection(); } currentTool = tool; toggleBrushSizePanel(false); document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active')); if(tool === 'brush') document.getElementById('btn-brush').classList.add('active'); if(tool === 'eraser') document.getElementById('btn-eraser').classList.add('active'); if(tool === 'select') document.getElementById('btn-select').classList.add('active'); if(tool === 'bucket') document.getElementById('btn-bucket').classList.add('active'); updateToolStyle(); }
+        function updateToolStyle() { if(!layers[activeLayerIndex]) return; const ctx = layers[activeLayerIndex].ctx; if (currentTool === 'brush') { ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = brushColor; ctx.lineWidth = brushSize; } else if (currentTool === 'eraser') { ctx.globalCompositeOperation = 'destination-out'; ctx.lineWidth = eraserSize; } else if (currentTool === 'bucket') { ctx.globalCompositeOperation = 'source-over'; } }
+        function getPos(e) { const rect = layers[0].canvas.getBoundingClientRect(); const scaleX = canvasW / rect.width; const scaleY = canvasH / rect.height; let clientX = e.touches ? e.touches[0].clientX : e.clientX; let clientY = e.touches ? e.touches[0].clientY : e.clientY; return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY }; }
+        function isPointInRect(point, rect) { return point.x >= rect.x && point.x <= rect.x + rect.w && point.y >= rect.y && point.y <= rect.y + rect.h; }
+
+        function startDraw(e) { if(isPlaying) return; if (e.touches && e.touches.length > 1) return; if (e.cancelable) e.preventDefault(); const pos = getPos(e); if (currentTool === 'bucket') { floodFill(Math.floor(pos.x), Math.floor(pos.y), brushColor); return; } if (currentTool === 'select') { if (selectionRect && isPointInRect(pos, selectionRect)) { isMovingSelection = true; if (!isImageLifted) { liftSelectionImage(); } selectionStart = pos; return; } if (isImageLifted) { commitSelection(); } painting = true; isMovingSelection = false; selectionStart = pos; selectionRect = { x: pos.x, y: pos.y, w: 0, h: 0 }; updateSelectionVisual(); return; } painting = true; const ctx = layers[activeLayerIndex].ctx; ctx.beginPath(); ctx.moveTo(pos.x, pos.y); }
+        function draw(e) { if(isPlaying) return; if (!painting && !isMovingSelection) return; if (e.touches && e.touches.length > 1) return; if (e.cancelable) e.preventDefault(); const pos = getPos(e); if (currentTool === 'select') { if (isMovingSelection && selectionRect) { const dx = pos.x - selectionStart.x; const dy = pos.y - selectionStart.y; selectionRect.x += dx; selectionRect.y += dy; selectionStart = pos; updateSelectionVisual(); } else if (painting) { const w = pos.x - selectionStart.x; const h = pos.y - selectionStart.y; selectionRect = { x: w < 0 ? pos.x : selectionStart.x, y: h < 0 ? pos.y : selectionStart.y, w: Math.abs(w), h: Math.abs(h) }; updateSelectionVisual(); } return; } const ctx = layers[activeLayerIndex].ctx; ctx.lineTo(pos.x, pos.y); ctx.stroke(); }
+        function endDraw(e) { if(isPlaying) return; if (isMovingSelection) { isMovingSelection = false; return; } if (!painting) return; painting = false; if (currentTool === 'select') { if (selectionRect.w < 2 || selectionRect.h < 2) { cancelSelection(); } else { updateSelectionVisual(); } return; } const ctx = layers[activeLayerIndex].ctx; ctx.closePath(); saveHistory(); }
+        
+        canvasContainer.addEventListener('mousedown', startDraw); window.addEventListener('mousemove', draw); window.addEventListener('mouseup', endDraw);
+        canvasContainer.addEventListener('touchstart', startDraw, { passive: false }); window.addEventListener('touchmove', draw, { passive: false }); window.addEventListener('touchend', endDraw);
+
+        function saveHistory() { const layer = layers[activeLayerIndex]; layer.historyStep++; if (layer.historyStep < layer.history.length) { layer.history.length = layer.historyStep; } layer.history.push(layer.canvas.toDataURL()); if (layer.history.length > 20) { layer.history.shift(); layer.historyStep--; } }
+        function undo() { const layer = layers[activeLayerIndex]; if (layer.historyStep > 0) { layer.historyStep--; restoreHistory(layer); } }
+        function redo() { const layer = layers[activeLayerIndex]; if (layer.historyStep < layer.history.length - 1) { layer.historyStep++; restoreHistory(layer); } }
+        function restoreHistory(layer) { const img = new Image(); img.src = layer.history[layer.historyStep]; img.onload = () => { layer.ctx.clearRect(0, 0, canvasW, canvasH); const prevComp = layer.ctx.globalCompositeOperation; layer.ctx.globalCompositeOperation = 'source-over'; layer.ctx.drawImage(img, 0, 0); layer.ctx.globalCompositeOperation = prevComp; }; }
+
+        const layerModal = document.getElementById('layer-modal'); const layerListEl = document.getElementById('layer-list');
+        function openLayerPanel() { renderLayerList(); layerModal.classList.remove('hidden'); }
+        function closeLayerPanel() { layerModal.classList.add('hidden'); }
+        function renderLayerList() { layerListEl.innerHTML = ''; for (let i = layers.length - 1; i >= 0; i--) { const layer = layers[i]; const isActive = (i === activeLayerIndex); const div = document.createElement('div'); div.className = `layer-item ${isActive ? 'active' : ''}`; div.onclick = () => setActiveLayer(i); div.innerHTML = `<div class="flex items-center gap-3"><div class="w-4 text-gray-400"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg></div><span class="layer-item-title">${layer.name}</span></div><div class="flex items-center gap-1"><button class="p-1 text-gray-400 hover:text-gray-600" onclick="moveLayer(${i}, 1, event)"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" /></svg></button><button class="p-1 text-gray-400 hover:text-gray-600" onclick="moveLayer(${i}, -1, event)"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg></button></div>`; if (layers.length > 1) { const delBtn = document.createElement('button'); delBtn.className = "text-gray-300 hover:text-red-500 ml-2 p-1"; delBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>`; delBtn.onclick = (e) => removeLayer(i, e); div.lastElementChild.appendChild(delBtn); } layerListEl.appendChild(div); } }
+
+        const colorModal = document.getElementById('color-modal'); const colorCanvas = document.getElementById('color-picker-canvas'); const ctxColor = colorCanvas.getContext('2d'); const hexDisplay = document.getElementById('hex-display'); const colorPreviewBox = document.getElementById('color-preview-box'); let cpState = { h: 0, s: 0, v: 0 }; let cpRadius = 125; let cpCenter = 125;
+        function openColorPicker() { colorModal.classList.remove('hidden'); drawColorPicker(); }
+        function closeColorPicker() { colorModal.classList.add('hidden'); setTool('brush'); }
+        function hsvToHex(h, s, v) { s/=100; v/=100; let c=v*s; let x=c*(1-Math.abs(((h/60)%2)-1)); let m=v-c; let r=0,g=0,b=0; if(0<=h&&h<60){r=c;g=x;b=0;}else if(60<=h&&h<120){r=x;g=c;b=0;}else if(120<=h&&h<180){r=0;g=c;b=x;}else if(180<=h&&h<240){r=0;g=x;b=c;}else if(240<=h&&h<300){r=x;g=0;b=c;}else if(300<=h&&h<360){r=c;g=0;b=x;} r=Math.round((r+m)*255).toString(16).padStart(2,'0'); g=Math.round((g+m)*255).toString(16).padStart(2,'0'); b=Math.round((b+m)*255).toString(16).padStart(2,'0'); return `#${r}${g}${b}`; }
+        function updateBrushColor() { const hex = hsvToHex(cpState.h, cpState.s, cpState.v); brushColor = hex; hexDisplay.innerText = hex.toUpperCase(); colorPreviewBox.style.backgroundColor = hex; updateToolStyle(); }
+        function drawColorPicker() {
+            ctxColor.clearRect(0,0, 250, 250);
+            const ringThickness = 30; const innerRadius = cpRadius - ringThickness;
+            for(let i=0; i<360; i++){ ctxColor.beginPath(); ctxColor.lineWidth = ringThickness+2; ctxColor.strokeStyle = `hsl(${i}, 100%, 50%)`; const rad = (i*Math.PI)/180; ctxColor.arc(cpCenter, cpCenter, cpRadius-ringThickness/2, rad, rad+0.03); ctxColor.stroke(); }
+            const diamondSize = innerRadius * Math.sqrt(2) - 10;
+            ctxColor.save(); ctxColor.translate(cpCenter, cpCenter); ctxColor.rotate(Math.PI/4);
+            ctxColor.fillStyle = `hsl(${cpState.h}, 100%, 50%)`; ctxColor.fillRect(-diamondSize/2, -diamondSize/2, diamondSize, diamondSize);
+            const wG = ctxColor.createLinearGradient(-diamondSize/2, 0, diamondSize/2, 0); wG.addColorStop(0, 'white'); wG.addColorStop(1, 'rgba(255,255,255,0)'); ctxColor.fillStyle = wG; ctxColor.fillRect(-diamondSize/2, -diamondSize/2, diamondSize, diamondSize);
+            const bG = ctxColor.createLinearGradient(0, diamondSize/2, 0, -diamondSize/2); bG.addColorStop(0, 'black'); bG.addColorStop(1, 'rgba(0,0,0,0)'); ctxColor.fillStyle = bG; ctxColor.fillRect(-diamondSize/2, -diamondSize/2, diamondSize, diamondSize);
+            ctxColor.restore();
+            const hRad = (cpState.h * Math.PI)/180;
+            ctxColor.beginPath(); ctxColor.arc(cpCenter + Math.cos(hRad)*(cpRadius-ringThickness/2), cpCenter + Math.sin(hRad)*(cpRadius-ringThickness/2), 8, 0, Math.PI*2); ctxColor.strokeStyle='white'; ctxColor.lineWidth=3; ctxColor.stroke();
+            const halfD = diamondSize/2; const localX = -halfD + (cpState.s/100)*diamondSize; const localY = -halfD + ((100-cpState.v)/100)*diamondSize;
+            const ang = Math.PI/4; const fX = cpCenter + (localX*Math.cos(ang) - localY*Math.sin(ang)); const fY = cpCenter + (localX*Math.sin(ang) + localY*Math.cos(ang));
+            ctxColor.beginPath(); ctxColor.arc(fX, fY, 6, 0, Math.PI*2); ctxColor.strokeStyle='white'; ctxColor.lineWidth=2; ctxColor.stroke(); ctxColor.beginPath(); ctxColor.arc(fX, fY, 3, 0, Math.PI*2); ctxColor.fillStyle='white'; ctxColor.fill();
+        }
+        function handleColorInput(e) {
+            e.preventDefault(); const rect = colorCanvas.getBoundingClientRect();
+            let cX = e.touches?e.touches[0].clientX:e.clientX; let cY = e.touches?e.touches[0].clientY:e.clientY;
+            let x = cX - rect.left - cpCenter; let y = cY - rect.top - cpCenter; const dist = Math.sqrt(x*x+y*y);
+            if(dist > 90) { let ang = Math.atan2(y, x)*(180/Math.PI); if(ang<0) ang+=360; cpState.h = ang; }
+            else { const r45 = -Math.PI/4; const lX = x*Math.cos(r45)-y*Math.sin(r45); const lY = x*Math.sin(r45)+y*Math.cos(r45); const dS = (95*Math.sqrt(2))-10;
+            cpState.s = Math.max(0, Math.min(100, ((lX+dS/2)/dS)*100)); cpState.v = Math.max(0, Math.min(100, 100-((lY+dS/2)/dS)*100)); }
+            drawColorPicker(); updateBrushColor();
+        }
+        colorCanvas.addEventListener('mousedown', (e)=>{ colorCanvas.addEventListener('mousemove', handleColorInput); handleColorInput(e); });
+        window.addEventListener('mouseup', ()=>{ colorCanvas.removeEventListener('mousemove', handleColorInput); });
+        colorCanvas.addEventListener('touchstart', (e)=>{ handleColorInput(e); }, {passive:false});
+        colorCanvas.addEventListener('touchmove', (e)=>{ handleColorInput(e); }, {passive:false});
+
+        function addTimelineFrame() { } function selectFrame(el) { document.querySelectorAll('.frame-item').forEach(f=>{ f.classList.remove('active'); f.querySelector('.absolute.bottom-0').classList.remove('bg-blue-500'); }); el.classList.add('active'); el.querySelector('.absolute.bottom-0').classList.add('bg-blue-500'); }
+        
+        updateBrushColor();
+    </script>
+</body>
+</html>
